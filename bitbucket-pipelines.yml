@@ -1,0 +1,236 @@
+image: node:14.15.4
+options:
+  size: 2x
+pipelines:
+  branches:
+    "{dev}":
+      - parallel:
+          - step:
+              name: Default pipeline run
+              caches:
+                - node
+              script:
+                - node -v
+                - npm -v
+          - step:
+              name: core frontend dev build
+              trigger: manual
+              caches:
+                - node
+              script:
+                - apt-get update
+                - apt-get install zip jq -y
+
+                - echo "Sonar pipeline, baby!"
+                - curl --insecure -OL https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.2.0.1873-linux.zip
+                - unzip sonar-scanner-cli-4.2.0.1873-linux.zip
+                - ./sonar-scanner-4.2.0.1873-linux/bin/sonar-scanner -Dsonar.host.url=http://18.136.198.43:9000/ -Dsonar.branch=$BITBUCKET_BRANCH -Dsonar.projectKey=esportssonar-1 -Dsonar.projectName=esportsweb -Dsonar.projectVersion=1.0 -Dsonar.sources=projects/esportscore/src,projects/stc/src,projects/mesf/src,projects/formation/src,projects/esports/src
+
+                - npm install -g @angular/cli
+                - npm install --save-dev @angular-devkit/build-angular
+                - npm install
+                - curl -O https://bootstrap.pypa.io/pip/2.6/get-pip.py
+                - python get-pip.py
+                - pip install awscli
+
+                - export AWS_ACCESS_KEY_ID=$CORE_AWS_ACCESS_KEY_ID
+                - export AWS_SECRET_ACCESS_KEY=$CORE_AWS_SECRET_ACCESS_KEY
+                - export AWS_DEFAULT_REGION=$CORE_AWS_DEFAULT_REGION
+                - echo $AWS_ACCESS_KEY_ID
+                - echo $AWS_SECRET_ACCESS_KEY
+                - echo $AWS_DEFAULT_REGION
+                - echo ${AWS_ACCESS_KEY_ID}
+
+                #- ng test
+                ################
+                ## Build core ###
+                ################
+                - echo "Build core"
+                - export ZIP_FILE=stcweb:$BITBUCKET_COMMIT.zip
+                - npm run core:build:dev:ssr
+                - aws s3 cp s3://dynastyesports-env/core/appspec.yml appspec.yml
+                - zip -ry $ZIP_FILE appspec.yml codedeploy/ dist/
+                - aws s3 cp dist/esportscore/browser/ s3://esports-web-core --recursive
+                - aws s3 cp $ZIP_FILE s3://esports-core
+                - aws cloudfront create-invalidation --distribution-id EC2ITQSZBL1N5  --paths "/*"
+                - export D_ID=$(aws deploy create-deployment --application-name esports-core --deployment-config-name CodeDeployDefault.OneAtATime --deployment-group-name esports-core --s3-location bucket=esports-core,bundleType=zip,key=$ZIP_FILE | jq --raw-output '.deploymentId')
+                - echo $D_ID
+                - aws deploy wait deployment-successful --deployment-id $D_ID
+                #- aws cloudfront create-invalidation --distribution-id E3QB7RHUCNDK5O --paths "/*"
+          - step:
+              name: stc frontend dev build
+              trigger: manual
+              caches:
+                - node
+              script:
+                - apt-get update
+                - apt-get install zip jq -y
+
+                - npm install -g @angular/cli
+                - npm install --save-dev @angular-devkit/build-angular
+                - npm install
+                - curl -O https://bootstrap.pypa.io/pip/2.6/get-pip.py
+                - python get-pip.py
+                - pip install awscli
+
+                - export AWS_ACCESS_KEY_ID=$DYNASTY_AWS_ACCESS_KEY_ID
+                - export AWS_SECRET_ACCESS_KEY=$DYNASTY_AWS_SECRET_ACCESS_KEY
+                - export AWS_DEFAULT_REGION=$DYNASTY_AWS_DEFAULT_REGION
+                - echo $AWS_ACCESS_KEY_ID
+                - echo $AWS_SECRET_ACCESS_KEY
+                - echo $AWS_DEFAULT_REGION
+                - echo ${AWS_ACCESS_KEY_ID}
+
+                #- ng test
+                ################
+                ## Build core ###
+                ################
+                - echo "Build stc"
+                - export ZIP_FILE=stcweb:$BITBUCKET_COMMIT.zip
+                - npm run stc:build:dev:ssr
+                - aws s3 cp s3://stc-env/appspec.yml appspec.yml
+                - zip -ry $ZIP_FILE appspec.yml codedeploy/ dist/
+                - aws s3 cp dist/stc/browser/ s3://stc-web-dev --recursive
+                - aws s3 cp $ZIP_FILE s3://stc-web-deployments
+                - aws cloudfront create-invalidation --distribution-id E2NS0M1ED349XR  --paths "/*"
+                - export D_ID=$(aws deploy create-deployment --application-name stcweb-developement --deployment-config-name CodeDeployDefault.OneAtATime --deployment-group-name stcweb-developement --s3-location bucket=stc-web-deployments,bundleType=zip,key=$ZIP_FILE | jq --raw-output '.deploymentId')
+                - echo $D_ID
+                - aws deploy wait deployment-successful --deployment-id $D_ID
+                #- aws cloudfront create-invalidation --distribution-id E3QB7RHUCNDK5O --paths "/*"
+          # - step:
+          #     name: mesf frontend dev build
+          #     trigger: manual
+          #     caches:
+          #       - node
+          #     script:
+          #       - apt-get update
+          #       - apt-get install zip jq -y
+
+          #       - npm install -g @angular/cli
+          #       - npm install --save-dev @angular-devkit/build-angular
+          #       - npm install
+          #       - curl -O https://bootstrap.pypa.io/pip/2.6/get-pip.py
+          #       - python get-pip.py
+          #       - pip install awscli
+
+          #       - export AWS_ACCESS_KEY_ID=$MESF_AWS_ACCESS_KEY_ID
+          #       - export AWS_SECRET_ACCESS_KEY=$MESF_AWS_SECRET_ACCESS_KEY
+          #       - export AWS_DEFAULT_REGION=$MESF_AWS_DEFAULT_REGION
+          #       - echo $AWS_ACCESS_KEY_ID
+          #       - echo $AWS_SECRET_ACCESS_KEY
+          #       - echo $AWS_DEFAULT_REGION
+          #       - echo ${AWS_ACCESS_KEY_ID}
+
+          #       #- ng test
+          #       ################
+          #       ## Build MESF ###
+          #       ################
+          #       - echo "Build MESF"
+          #       - export ZIP_FILE=dynastyweb:$BITBUCKET_COMMIT.zip
+          #       - npm run mesf:build:dev:ssr
+          #       - zip -ry $ZIP_FILE mesf/appspec.yml codedeploy/mesf/ dist/
+          #       #- aws s3 cp dist/mesf/browser/ s3://esports-web-core --recursive
+          #       - aws s3 cp $ZIP_FILE s3://mesf-web-dev
+          #       #- aws cloudfront create-invalidation --distribution-id EC2ITQSZBL1N5  --paths "/*"
+          #       - export D_ID=$(aws deploy create-deployment --application-name mesf-web-dev --deployment-config-name CodeDeployDefault.OneAtATime --deployment-group-name mesf-web-dev --s3-location bucket=mesf-web-dev,bundleType=zip,key=$ZIP_FILE | jq --raw-output '.deploymentId')
+          #       - echo $D_ID
+          #       - aws deploy wait deployment-successful --deployment-id $D_ID
+          #       #- aws cloudfront create-invalidation --distribution-id E3QB7RHUCNDK5O --paths "/*"
+    "{stage}":
+      - parallel:
+          - step:
+              name: Default pipeline run for stage
+              caches:
+                - node
+              script:
+                - node -v
+                - npm -v
+          - step:
+              name: stc frontend stage build
+              trigger: manual
+              caches:
+                - node
+              script:
+                - apt-get update
+                - apt-get install zip jq -y
+
+                - npm install -g @angular/cli
+                - npm install --save-dev @angular-devkit/build-angular
+                - npm install
+                - curl -O https://bootstrap.pypa.io/pip/2.6/get-pip.py
+                - python get-pip.py
+                - pip install awscli
+
+                - export AWS_ACCESS_KEY_ID=$DYNASTY_AWS_ACCESS_KEY_ID
+                - export AWS_SECRET_ACCESS_KEY=$DYNASTY_AWS_SECRET_ACCESS_KEY
+                - export AWS_DEFAULT_REGION=$DYNASTY_AWS_DEFAULT_REGION
+                - echo $AWS_ACCESS_KEY_ID
+                - echo $AWS_SECRET_ACCESS_KEY
+                - echo $AWS_DEFAULT_REGION
+                - echo ${AWS_ACCESS_KEY_ID}
+
+                #- ng test
+                ################
+                ## Build core ###
+                ################
+                - echo "Build stc stage"
+                - export ZIP_FILE=stcweb:$BITBUCKET_COMMIT.zip
+                - npm run stc:build:stage:ssr
+                - aws s3 cp s3://stc-env/appspec.yml appspec.yml
+                - zip -ry $ZIP_FILE appspec.yml codedeploy/ dist/
+                - aws s3 cp dist/stc/browser/ s3://stc-web-stage --recursive
+                - aws s3 cp $ZIP_FILE s3://stc-stage-s3
+                - aws cloudfront create-invalidation --distribution-id EAJ9F150ODP57  --paths "/*"
+                - export D_ID=$(aws deploy create-deployment --application-name stcweb-stage --deployment-config-name CodeDeployDefault.OneAtATime --deployment-group-name stcweb-stage --s3-location bucket=stc-stage-s3,bundleType=zip,key=$ZIP_FILE | jq --raw-output '.deploymentId')
+                - echo $D_ID
+                - aws deploy wait deployment-successful --deployment-id $D_ID
+                #- aws cloudfront create-invalidation --distribution-id E3QB7RHUCNDK5O --paths "/*"
+    "{master}":
+      - parallel:
+          - step:
+              name: Default pipeline run for master
+              caches:
+                - node
+              script:
+                - node -v
+                - npm -v
+          - step:
+              name: stc frontend master build
+              trigger: manual
+              caches:
+                - node
+              script:
+                - apt-get update
+                - apt-get install zip jq -y
+
+                - npm install -g @angular/cli
+                - npm install --save-dev @angular-devkit/build-angular
+                - npm install
+                - curl -O https://bootstrap.pypa.io/pip/2.6/get-pip.py
+                - python get-pip.py
+                - pip install awscli
+
+                - export AWS_ACCESS_KEY_ID=$DYNASTY_AWS_ACCESS_KEY_ID
+                - export AWS_SECRET_ACCESS_KEY=$DYNASTY_AWS_SECRET_ACCESS_KEY
+                - export AWS_DEFAULT_REGION=$DYNASTY_AWS_DEFAULT_REGION
+                - echo $AWS_ACCESS_KEY_ID
+                - echo $AWS_SECRET_ACCESS_KEY
+                - echo $AWS_DEFAULT_REGION
+                - echo ${AWS_ACCESS_KEY_ID}
+
+                #- ng test
+                ################
+                ## Build core ###
+                ################
+                - echo "Build stc master"
+                - export ZIP_FILE=stcweb:$BITBUCKET_COMMIT.zip
+                - npm run stc:build:prod:ssr
+                - aws s3 cp s3://stc-env/appspec.yml appspec.yml
+                - zip -ry $ZIP_FILE appspec.yml codedeploy/ dist/
+                - aws s3 cp dist/stc/browser/ s3://stc-web-prod --recursive
+                - aws s3 cp $ZIP_FILE s3://stcweb-prod
+                - aws cloudfront create-invalidation --distribution-id E2HPI4M5W9OFHE  --paths "/*"
+                - export D_ID=$(aws deploy create-deployment --application-name stcweb-prod --deployment-config-name CodeDeployDefault.OneAtATime --deployment-group-name stcweb-prod --s3-location bucket=stcweb-prod,bundleType=zip,key=$ZIP_FILE | jq --raw-output '.deploymentId')
+                - echo $D_ID
+                - aws deploy wait deployment-successful --deployment-id $D_ID
+                #- aws cloudfront create-invalidation --distribution-id E3QB7RHUCNDK5O --paths "/*"
