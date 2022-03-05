@@ -23,8 +23,8 @@ The pipeline's first stage is the build stage
 In the build stage, we pull the code from the SCM (in this case GitHub)
 [![scm.png](https://i.postimg.cc/Y9tVHWSw/scm.png)](https://postimg.cc/yJrnhW9f)
 
-The next step in the build stage is to build the java project using maven and compile it into a artefact file
-This node is configured to automatically start the pipeline if there is a new commit to the GitHub repo; It will also start the pipeline every 5 hours everyday
+The next step in the build stage is to build the java project using maven and compile it into a artefact file.
+This node is configured to automatically start the pipeline if there is a new commit to the GitHub repo; It will also start the pipeline every 5 hours everyday.
 
 3.
 Unit testing & integration testing
